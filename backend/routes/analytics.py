@@ -8,13 +8,13 @@ router = APIRouter()
 
 @router.get("/top-customers")
 def top_customers(limit: int = 5, db=Depends(get_db)):
-    """Top N customers by total revenue."""
+    """Top N customers by total revenue from paid invoices."""
     q = """
     SELECT c.name, SUM(li.quantity * li.unit_price) as revenue
     FROM customers c
     JOIN invoices i ON i.customer_id = c.id
     JOIN invoice_line_items li ON li.invoice_id = i.id
-    JOIN payments p ON p.invoice_id = i.id
+    WHERE i.status = 'paid'
     GROUP BY c.id, c.name
     ORDER BY revenue DESC
     LIMIT :limit
@@ -25,11 +25,11 @@ def top_customers(limit: int = 5, db=Depends(get_db)):
 
 @router.get("/avg-days-to-pay")
 def avg_days_to_pay(db=Depends(get_db)):
-    """Average number of days from invoice issue to full payment."""
+    """Average number of days from invoice issue to full payment (paid invoices only)."""
     q = """
-    SELECT AVG(COALESCE(paid_date, CURRENT_DATE) - issued_date) as avg_days
+    SELECT AVG(paid_date - issued_date) as avg_days
     FROM invoices
-    WHERE status != 'void'
+    WHERE status = 'paid' AND paid_date IS NOT NULL
     """
     result = db.execute(text(q)).scalar()
     return {"avg_days": float(result) if result is not None else 0}
@@ -38,13 +38,14 @@ def avg_days_to_pay(db=Depends(get_db)):
 @router.get("/total-outstanding")
 def total_outstanding(db=Depends(get_db)):
     """Total dollar amount across all unpaid invoices."""
-    try:
-        result = db.execute(
-            text("SELECT SUM(amount_due) FROM invoices WHERE status != 'paid'")
-        ).scalar()
-        return {"total": float(result or 0)}
-    except Exception:
-        return {"total": 0}
+    q = """
+    SELECT COALESCE(SUM(li.quantity * li.unit_price), 0)
+    FROM invoices i
+    JOIN invoice_line_items li ON li.invoice_id = i.id
+    WHERE i.status NOT IN ('paid', 'void')
+    """
+    result = db.execute(text(q)).scalar()
+    return {"total": float(result or 0)}
 
 
 @router.get("/invoices-by-status")
