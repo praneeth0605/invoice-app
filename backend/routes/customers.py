@@ -10,8 +10,8 @@ router = APIRouter()
 def list_customers(search: str = "", db=Depends(get_db)):
     if search:
         rows = db.execute(
-            text("SELECT id, name, email FROM customers WHERE name ILIKE :search ORDER BY name"),
-            {"search": f"%{search}%"},
+            text("SELECT id, name, email FROM customers WHERE LOWER(name) LIKE :search ORDER BY name"),
+            {"search": f"%{search.lower()}%"},
         ).fetchall()
     else:
         rows = db.execute(
