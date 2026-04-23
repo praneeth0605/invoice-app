@@ -9,7 +9,6 @@ export default function Customers() {
   useEffect(() => {
     setLoading(true)
     get(`/customers?search=${search}`).then((data) => {
-      console.log('customers:', data)
       setCustomers(data)
       setLoading(false)
     })
@@ -29,8 +28,8 @@ export default function Customers() {
       ) : (
         <ul>
           {customers.map((c) => (
-            <li>
-              <strong>{c.name}</strong> — {c.email} — TIN: {c.tax_id}
+            <li key={c.id}>
+              <strong>{c.name}</strong> — {c.email}
             </li>
           ))}
         </ul>

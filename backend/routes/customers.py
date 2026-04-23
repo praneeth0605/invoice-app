@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 
 from db import get_db
@@ -9,13 +9,15 @@ router = APIRouter()
 @router.get("")
 def list_customers(search: str = "", db=Depends(get_db)):
     if search:
-        q = f"SELECT id, name, email, tax_id FROM customers WHERE name ILIKE '%{search}%' ORDER BY name"
-        rows = db.execute(text(q)).fetchall()
+        rows = db.execute(
+            text("SELECT id, name, email FROM customers WHERE name ILIKE :search ORDER BY name"),
+            {"search": f"%{search}%"},
+        ).fetchall()
     else:
         rows = db.execute(
-            text("SELECT id, name, email, tax_id FROM customers ORDER BY name")
+            text("SELECT id, name, email FROM customers ORDER BY name")
         ).fetchall()
-    return [{"id": r[0], "name": r[1], "email": r[2], "tax_id": r[3]} for r in rows]
+    return [{"id": r[0], "name": r[1], "email": r[2]} for r in rows]
 
 
 @router.get("/{customer_id}")
@@ -25,7 +27,7 @@ def get_customer(customer_id: int, db=Depends(get_db)):
         {"id": customer_id},
     ).first()
     if not customer:
-        return {"error": "not found"}
+        raise HTTPException(status_code=404, detail="Customer not found")
 
     invoices = db.execute(
         text(
