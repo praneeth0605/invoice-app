@@ -5,19 +5,28 @@ import { get } from '../api'
 export default function InvoiceDetail() {
   const { id } = useParams()
   const [invoice, setInvoice] = useState<any>(null)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    get(`/invoices/${id}`).then(setInvoice)
+    get(`/invoices/${id}`)
+      .then((data) => {
+        if (data.detail) throw new Error(data.detail)
+        setInvoice(data)
+      })
+      .catch((e) => setError(e.message || 'Failed to load invoice.'))
   }, [id])
 
+  if (error) return <p style={{ color: 'red' }}>{error}</p>
   if (!invoice) return <p>Loading...</p>
 
   return (
     <div>
       <h1>Invoice {invoice.number}</h1>
-      <p>
-        Customer: {invoice.customer.name} ({invoice.customer.email}) — TIN: {invoice.customer.tax_id}
-      </p>
+      {invoice.customer ? (
+        <p>Customer: {invoice.customer.name} ({invoice.customer.email})</p>
+      ) : (
+        <p>Customer: (unknown)</p>
+      )}
       <p>Status: {invoice.status}</p>
       <p>Issued: {invoice.issued_date}</p>
       <p>Due: {invoice.due_date}</p>
