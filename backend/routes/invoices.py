@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 
 from db import get_db
@@ -8,43 +8,41 @@ router = APIRouter()
 
 @router.get("")
 def list_invoices(status: str = None, db=Depends(get_db)):
-    try:
-        if status:
-            invoices = db.execute(
-                text(
-                    "SELECT id, invoice_number, status, customer_id, issued_date, due_date "
-                    "FROM invoices WHERE status = :status ORDER BY issued_date DESC"
-                ),
-                {"status": status},
-            ).fetchall()
-        else:
-            invoices = db.execute(
-                text(
-                    "SELECT id, invoice_number, status, customer_id, issued_date, due_date "
-                    "FROM invoices ORDER BY issued_date DESC"
-                )
-            ).fetchall()
-
-        out = []
-        for inv in invoices:
-            customer = db.execute(
-                text("SELECT name FROM customers WHERE id = :id"),
-                {"id": inv[3]},
-            ).first()
-            out.append(
-                {
-                    "id": inv[0],
-                    "number": inv[1],
-                    "status": inv[2],
-                    "customer_id": inv[3],
-                    "customer_name": customer[0] if customer else "(unknown)",
-                    "issued_date": str(inv[4]),
-                    "due_date": str(inv[5]),
-                }
+    if status:
+        invoices = db.execute(
+            text(
+                "SELECT i.id, i.invoice_number, i.status, i.customer_id, "
+                "i.issued_date, i.due_date, c.name as customer_name "
+                "FROM invoices i "
+                "JOIN customers c ON c.id = i.customer_id "
+                "WHERE i.status = :status "
+                "ORDER BY i.issued_date DESC"
+            ),
+            {"status": status},
+        ).fetchall()
+    else:
+        invoices = db.execute(
+            text(
+                "SELECT i.id, i.invoice_number, i.status, i.customer_id, "
+                "i.issued_date, i.due_date, c.name as customer_name "
+                "FROM invoices i "
+                "JOIN customers c ON c.id = i.customer_id "
+                "ORDER BY i.issued_date DESC"
             )
-        return out
-    except Exception:
-        return []
+        ).fetchall()
+
+    return [
+        {
+            "id": inv[0],
+            "number": inv[1],
+            "status": inv[2],
+            "customer_id": inv[3],
+            "issued_date": str(inv[4]),
+            "due_date": str(inv[5]),
+            "customer_name": inv[6] if inv[6] else "(unknown)",
+        }
+        for inv in invoices
+    ]
 
 
 @router.get("/{invoice_id}")
@@ -57,7 +55,7 @@ def get_invoice(invoice_id: int, db=Depends(get_db)):
         {"id": invoice_id},
     ).first()
     if not inv:
-        return {"error": "not found"}
+        raise HTTPException(status_code=404, detail="Invoice not found")
 
     items = db.execute(
         text(
@@ -76,7 +74,7 @@ def get_invoice(invoice_id: int, db=Depends(get_db)):
     ).fetchall()
 
     customer = db.execute(
-        text("SELECT id, name, email, tax_id FROM customers WHERE id = :id"),
+        text("SELECT id, name, email FROM customers WHERE id = :id"),
         {"id": inv[3]},
     ).first()
 
@@ -85,7 +83,7 @@ def get_invoice(invoice_id: int, db=Depends(get_db)):
         "number": inv[1],
         "status": inv[2],
         "customer": (
-            {"id": customer[0], "name": customer[1], "email": customer[2], "tax_id": customer[3]}
+            {"id": customer[0], "name": customer[1], "email": customer[2]}
             if customer
             else None
         ),
